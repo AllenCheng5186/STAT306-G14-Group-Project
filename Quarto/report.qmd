@@ -19,13 +19,18 @@ editor: visual
 
 ## Data Preparation
 
-The response variable \`SalePrice\` column is divided by 10,000, so the unit for response variable is 10 thousand dollar.
+The response variable \`SalePrice\` column is divided by 1,000, so the unit for response variable is 1 thousand dollar.
 
 ```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
 library(car)
 library(leaps)
-library(knitr)
-library(kableExtra)
+library(knitr)  # TODO
+library(kableExtra) # TODO
 library(olsrr)
 
 # options(repr.matrix.max.rows = 20)
@@ -34,8 +39,11 @@ ames_housing <- read.table("https://raw.githubusercontent.com/AllenCheng5186/STA
 
 ames_housing$SalePrice <- ames_housing$SalePrice / 10000
 
-house = ames_housing[, c("SalePrice","Overall.Qual", "Gr.Liv.Area", "Garage.Area", 
-                         "Year.Built", "Lot.Area", "Bedroom.AbvGr", "Kitchen.AbvGr", "Lot.Shape")]
+house = ames_housing[, c("SalePrice", "Overall.Qual", "Gr.Liv.Area",
+                         "Garage.Area", "Year.Built", "Lot.Area",
+                         "Bedroom.AbvGr", "Kitchen.AbvGr", "Lot.Shape",
+                         "Utilities", "Yr.Sold", "Central.Air",
+                         "Electrical", "TotRms.AbvGrd")]
 
 house[sapply(house, is.character)] <- lapply(house[sapply(house, is.character)], as.factor)
 house$Overall.Qual <- as.factor(house$Overall.Qual)
@@ -44,19 +52,94 @@ house[is.na(house)] <- 0
 head(house)
 ```
 
-Based on the pairwise scatterplots for the continuous variables in the data (all variables except `Overall.Qual` and `Lot.Shape`), none of the plots show obvious linear patterns and so there do not appear to be strong linear associations.
+## Model Selection
 
-```{r fig.height=15,fig.width=15}
-options(repr.plot.width = 15, repr.plot.height = 15)
-
-pairs(house[,-c(2, 9, 11)], pch=19)
-```
-
-There does not appear to be a strong correlation between any pair of continuous variables.
+forward selection
 
 ```{r}
-round(cor(house[,!(names(house) %in% c("Overall.Qual","Lot.Shape"))]), 3)
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
+full_model <- lm(SalePrice ~ ., data = house)
+
+forward <- ols_step_forward_r2(full_model)
+
+forward$metrics
 ```
+
+```{r fig.height=5,fig.width=10}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+
+cp_scores <- numeric(length = length(forward$metrics$variable))
+num_params <- numeric(length = length(forward$metrics$variable))
+cp_distance <- numeric(length = length(forward$metrics$variable))
+
+# Mallow's Cp
+for (i in seq_along(forward$metrics$variable)) {
+  predictors <- forward$metrics$variable[1:i]
+  formula_str <- paste("SalePrice ~", paste(predictors, collapse = " + "))
+  model_i <- lm(as.formula(formula_str), data = house)
+  cp_val <- ols_mallows_cp(model_i, full_model)
+  cp_scores[i] <- cp_val
+  num_params[i] <- length(predictors) + 1
+  cp_distance[i] = abs(cp_val - (length(predictors) + 1))
+}
+
+# AIC
+predictors <- setdiff(names(house), "SalePrice")
+
+current_formula <- as.formula("SalePrice ~ 1")
+current_model <- lm(current_formula, data = house)
+aic_values <- c(AIC(current_model))
+num_predictors <- 0
+selected <- c()
+
+for(i in 1:length(predictors)) {
+  remaining <- setdiff(predictors, selected)
+  aic_candidates <- sapply(remaining, function(var) {
+    new_formula <- as.formula(paste("SalePrice ~", paste(c(selected, var), collapse = " + ")))
+    AIC(lm(new_formula, data = house))
+  })
+  best_var <- names(which.min(aic_candidates))
+  selected <- c(selected, best_var)
+  current_formula <- as.formula(paste("SalePrice ~", paste(selected, collapse = " + ")))
+  current_model <- lm(current_formula, data = house)
+  aic_values <- c(aic_values, AIC(current_model))
+  num_predictors <- c(num_predictors, length(selected))
+}
+
+par(mfrow = c(1, 2))
+# Plot Cp vs p+1
+plot(num_params, cp_scores, type = "b", pch = 19,
+     xlab = "Number of Parameters (p + 1)",
+     ylab = "Mallow's Cp",
+     main = "Mallow's Cp vs Number of Parameters")
+abline(0, 1, col = "red", lty = 2)
+abline(v = which.min(cp_distance), col = "blue", lty = 2)
+# Plot AIC vs. number of predictors
+plot(0:length(predictors), aic_values, type = "b",
+     xlab = "Number of predictors", ylab = "AIC",
+     main = "Change in AIC with Forward Selection")
+
+min_index <- which.min(aic_values)
+min_num_pred <- num_predictors[min_index]
+abline(v = min_num_pred, col = "red", lty = 2)
+```
+
+These two plots shows we can use 9 covariates in our final model.
+
+From the plot of Mallow's CP score, the score more close to number of parameter (p+1) means better
+
+From the plot of AIC, the AIC score lower mean better.
+
+Then we decided to use top 9 covariates from forward selection, which covariate that has strongest relationship during each iteration in the greedy algorithm
+
+## Multi-collinearity check
 
 calculate VIF to verify that there is not strong correlation between any continuous variables.
 
@@ -65,6 +148,10 @@ why use VIF? What is the advantage of using VIF? Using thumb theory of 10 as cut
 explain what is multi-collinearity -\> any correlation among explanatory variables (X)
 
 ```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
 house_numeric_only = house[, sapply(house, is.numeric)]
 house_numeric_lreg = lm(SalePrice ~ ., data = house_numeric_only)
 
@@ -74,17 +161,27 @@ vif(house_numeric_lreg)
 ## Fit full model (using all covariates)
 
 ```{r}
-full_linear_reg = lm(SalePrice~.,data = house)
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+final_model = lm(SalePrice ~ Overall.Qual + Gr.Liv.Area + Year.Built + 
+                 Lot.Area + Garage.Area + Kitchen.AbvGr + Lot.Shape + 
+                 Bedroom.AbvGr + Central.Air, data = house)
 
-summary(full_linear_reg)
+summary(final_model)
 ```
 
 verify assumption: residual vs fitted value plot
 
 ```{r fig.height=4.5,fig.width=4.5}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
 # options(repr.plot.width = 7, repr.plot.height = 7)
 
-plot(full_linear_reg$fitted.values, full_linear_reg$residuals,
+plot(final_model$fitted.values, final_model$residuals,
      xlab="Fitted value", ylab="Residual")
 abline(h = 0, col = "red")
 ```
@@ -94,10 +191,14 @@ funnel pattern appear
 linear regression assumption: homoscedasticity $Var(\Sigma)  = \sigma^2$ violated
 
 ```{r fig.height=4.5,fig.width=4.5}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
 # options(repr.plot.width = 7, repr.plot.height = 7)
 
-qqnorm(full_linear_reg$residuals)
-qqline(full_linear_reg$residuals)
+qqnorm(final_model$residuals)
+qqline(final_model$residuals, col = "red")
 ```
 
 heavy tail observed -\> homoscedasticity $Var(\Sigma) = \sigma^2$ violated
@@ -108,13 +209,16 @@ take log on response variable Y, log(Y)
 
 create scatterplot between log(Y) and each continuous variables of X
 
-```{r fig.height=10,fig.width=15}
-
+```{r fig.height=9,fig.width=15}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
 num_vars <- names(house)[sapply(house, is.numeric)]
 predictors <- setdiff(num_vars, c("SalePrice", "log_SalePrice"))
 
 # options(repr.plot.width = 15, repr.plot.height = 10)
-par(mfrow = c(2, 3))
+par(mfrow = c(2, 4))
 
 for (var in predictors) {
   plot(house[[var]], log(house$SalePrice), pch=19,
@@ -128,106 +232,50 @@ every pair show linear relationship, except for `Year.Built` that still curved.
 
 fit linear model again with log(Y) as response variable
 
+since `Year.Build` shows quadratic relationship, we use $$(X_{Year.Built}- \bar{X_{Year.Built}})^2$$
+
 ```{r fig.height=4.5,fig.width=4.5}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
 # options(repr.plot.width = 7, repr.plot.height = 7)
 
-reg_logY = lm(log(SalePrice) ~ Gr.Liv.Area+ Garage.Area + Year.Built + Lot.Area + 
-              Bedroom.AbvGr + Kitchen.AbvGr, data = house)
+house$log_SalePrice <- log(house$SalePrice)
+house$quad_Year.Built <- (house$Year.Built - mean(house$Year.Built))^2
 
-plot(x = reg_logY$fitted.values, y = reg_logY$residuals,
-     xlim = c(1.9, 3.8), ylim =c(-1.0, 0.8), 
+transform_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + quad_Year.Built + 
+                     Lot.Area + Garage.Area + Kitchen.AbvGr + Lot.Shape + 
+                     Bedroom.AbvGr + Central.Air, data = house)
+
+plot(x = transform_model$fitted.values, y = transform_model$residuals,
+     xlim = c(1.9, 3.8), ylim =c(-1.0, 0.8),
      xlab="Fitted value", ylab="Residual")
 ```
 
 looks random -\> assumptions aligned! -\> conclusion will be valid
 
-since `Year.Built` is curved which could have quadratic relationship with response variable, so fit log(Year.Built) into model again
-
-```{r fig.height=4.5,fig.width=4.5}
-reg_logY_logYear = lm(log(SalePrice) ~ Gr.Liv.Area+ Garage.Area + log(Year.Built) + 
-                      Lot.Area + Bedroom.AbvGr + Kitchen.AbvGr, data = house)
-
-plot(x = reg_logY_logYear$fitted.values, y = reg_logY_logYear$residuals,
-     xlim = c(1.9, 3.8), ylim =c(-1.0, 0.8),  #TODO outlier in residual plot
-     xlab="Fitted value", ylab="Residual")
-```
+now, transformed model become our final model.
 
 ```{r}
-house$log_SalePrice = log(house$SalePrice)
-house$log_Year.Built = log(house$Year.Built)
-
-log_full_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Garage.Area + 
-                    log_Year.Built + Lot.Area + Bedroom.AbvGr + Kitchen.AbvGr + 
-                    Lot.Shape, data = house)
-
-summary(log_full_model)
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+summary(transform_model)
 ```
 
-## Model Selection
-
-two forwarding selection functions from two different package have different result with categorical covariates.
-
-I suggest we check with prof to decide which one use.
-
-```{r fig.height=5,fig.width=5}
-s <- regsubsets(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Garage.Area + 
-                    log_Year.Built + Lot.Area + Bedroom.AbvGr + Kitchen.AbvGr + 
-                    Lot.Shape, data = house, method = "forward") 
-
-ss <- summary(s)
-
-# s_summary <- as.data.frame(summary(s)$outmat)
-# kable(s_summary, format = "latex", booktabs = TRUE) %>%
-#   kable_styling(latex_options = c("scale_down", "hold_position"))
-
-cps <- ss$cp
-num_predictors <- apply(ss$which, 1, function(x) sum(x) - 1) 
-
-model_matrix <- ss$which[, -1, drop = FALSE]  
-model_names <- colnames(model_matrix)
-
-added_vars <- character(nrow(model_matrix))
-for (i in 2:nrow(model_matrix)) {
-  prev <- model_matrix[i - 1, ]
-  curr <- model_matrix[i, ]
-  new_var <- setdiff(model_names[curr & !prev], model_names[prev])
-  added_vars[i] <- ifelse(length(new_var) > 0, new_var, "")
-}
-added_vars[1] <- "Start"  
-
-plot(num_predictors, cps, type = "b", pch = 19,
-     xlab = "Number of Predictors", ylab = "Mallow's Cp",
-     main = "Mallow's Cp vs Number of Predictors")
-text(num_predictors, cps, labels = added_vars, pos = 3, cex = 0.7, col = "blue")
-abline(0, 1, col = "red", lty = 2)
-```
-
-```{r}
-forward_sel <- ols_step_forward_r2(log_full_model)
-
-forward_sel$metrics
-```
-
-But top four covariates output are same
+Top four covariates output remain same. Inferiential question started from choose from these 4 variables.
 
 1 Overall.Qual\
 2 Gr.Liv.Area\
 3 Year.Built\
 4 Lot.Area
 
-Now, we fit the model with selected top 4 covariates (use log(Year.Built) for Year.Built)
-
-```{r}
-best_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + log_Year.Built + 
-                Lot.Area, data = house)
-
-summary(best_model)
-```
-
 very high adjust R square
 
-```{r}
-ols_mallows_cp(best_model, log_full_model)
-```
+## Interaction Term
 
-Mallow's CP score also show it is the lowest one compared to the above plot.
+//TODO confirm if we still need to consider interaction term since all covariates in best subset model are all positive, no counterintuitive which full model has counterintuitive term.
+
+## outlier, leverage, influence
