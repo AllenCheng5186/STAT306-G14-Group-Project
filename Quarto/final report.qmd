@@ -1,0 +1,521 @@
+---
+title: "STAT 306 2024W2 - Project: Report"
+format: 
+  pdf:
+    fontsize: 10pt
+editor: visual
+---
+
+# Group Project Report
+
+## Outline
+
+1.  Explorative Data Analysis (right skew) + linear regression assumption violation
+2.  log(Y) transformation
+3.  model selection (forward)
+4.  multi-collinearity check
+5.  Interaction Term
+6.  outlier, leverage, influence
+
+## Data Preparation
+
+The response variable \`SalePrice\` column is divided by 1,000, so the unit for response variable is 1 thousand dollar.
+
+### **Excluded Categories & Why (Reduce from 80 to 14)**
+
+Identifiers: `Order`, `PID` – not informative for modeling.
+
+Highly Sparse or Rare Categories: `Misc Feature`, `Pool QC`, `Fence` – too many NAs or uncommon cases.
+
+Redundant or Derived Variables: `Year Remod/Add` is often correlated with `Year Built` .
+
+Uncertain Interpretation: `Roof Matl`, `Exterior2`, `Condition2` – often inconsistent or hard to use effectively.
+
+Highly granular: `Neighborhood`, `MS SubClass`, and `Bldg Type` have many levels; including all may lead to overfitting unless consolidated.
+
+Some quality are too subjuctive evaluation, not good
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
+library(car)
+library(leaps)
+library(knitr)
+library(kableExtra)
+library(olsrr)
+library(ggplot2)
+library(patchwork)
+
+# options(repr.matrix.max.rows = 20)
+
+ames_housing <- read.table("https://raw.githubusercontent.com/AllenCheng5186/STAT306-G14-Group-Project/refs/heads/main/data/ames-housing.csv", sep = ",", header=T)
+
+ames_housing$SalePrice <- ames_housing$SalePrice / 10000
+
+house = ames_housing[, c("SalePrice", "Overall.Qual", "Gr.Liv.Area",
+                         "Garage.Area", "Year.Built", "Lot.Area",
+                         "Bedroom.AbvGr", "Kitchen.AbvGr", "Lot.Shape",
+                         "Utilities", "Yr.Sold", "Central.Air",
+                         "Electrical", "TotRms.AbvGrd")]
+
+house[sapply(house, is.character)] <- lapply(house[sapply(house, is.character)], as.factor)
+# house$Overall.Qual <- as.factor(house$Overall.Qual)
+house[is.na(house)] <- 0
+
+head(house)
+```
+
+## Explorative Data Analysis
+
+```{r fig.height=8,fig.width=8}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+
+par(mfrow = c(2, 2))
+boxplot(house$SalePrice~house$Lot.Shape)
+boxplot(house$SalePrice~house$Utilities)
+boxplot(house$SalePrice~house$Electrical)
+boxplot(house$SalePrice~house$Central.Air)
+```
+
+Right skew show on the plot is a signal a do log(Y) transformation + assumption check also
+
+## Model Diagnostic (Linear Regression Assumption Check)
+
+```{r fig.height=4,fig.width=8}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+full_model = lm(SalePrice ~ ., data = house)
+
+# summary(full_model)
+
+# options(repr.plot.width = 7, repr.plot.height = 7)
+par(mfrow = c(1, 2))
+plot(full_model$fitted.values, full_model$residuals,
+     xlab="Fitted value", ylab="Residual")
+abline(h = 0, col = "red")
+
+qqnorm(full_model$residuals)
+qqline(full_model$residuals, col = "red")
+```
+
+verify assumption: residual vs fitted value plot
+
+funnel pattern appear
+
+linear regression assumption: homoscedasticity $Var(\Sigma)  = \sigma^2$ violated
+
+heavy tail observed -\> homoscedasticity $Var(\Sigma) = \sigma^2$ violated
+
+## Log(Y) Transformation
+
+take log on response variable Y, log(Y)
+
+create scatterplot between log(Y) and each continuous variables of X
+
+```{r fig.height=10,fig.width=10}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+# Replace SalePrice values with log-transformed values
+house$SalePrice <- log(house$SalePrice)
+
+# Optionally rename the column (if you want to reflect it's log-transformed)
+names(house)[names(house) == "SalePrice"] <- "log_SalePrice"
+
+num_vars <- names(house)[sapply(house, is.numeric)]
+predictors <- setdiff(num_vars, c("SalePrice", "log_SalePrice"))
+
+# options(repr.plot.width = 15, repr.plot.height = 10)
+par(mfrow = c(3, 3))
+
+for (var in predictors) {
+  plot(house[[var]], house$log_SalePrice, pch=19,
+       xlab = var, ylab = "log(SalePrice)",
+       main = paste("log(SalePrice) vs", var))
+  grid()
+}
+```
+
+every pair show linear relationship, except for `Year.Built` that still curved.
+
+fit linear model again with log(Y) as response variable
+
+since `Year.Build` shows quadratic relationship, we use $$(X_{Year.Built}- \bar{X_{Year.Built}})^2$$
+
+looks random -\> assumptions aligned! -\> conclusion will be valid
+
+now, transformed model become our final model.
+
+```{r fig.height=4,fig.width=8}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+# options(repr.plot.width = 7, repr.plot.height = 7)
+house$Quatratic_Gr.Liv.Area = (house$Gr.Liv.Area-mean(house$Gr.Liv.Area))^2
+house$Quatratic_Year.Built = (house$Year.Built-mean(house$Year.Built))^2
+house$Quatratic_Garage.Area = (house$Garage.Area-mean(house$Garage.Area))^2
+house$Quatratic_TotRms.AbvGrd = (house$TotRms.AbvGrd-mean(house$TotRms.AbvGrd))^2
+
+additive_model = lm(log_SalePrice ~ Overall.Qual + 
+                       Gr.Liv.Area + Quatratic_Gr.Liv.Area +
+                       Year.Built + Quatratic_Year.Built+ 
+                       Garage.Area + Quatratic_Garage.Area + 
+                       Central.Air + Lot.Area + Lot.Shape + Kitchen.AbvGr + 
+                       Electrical + Bedroom.AbvGr + Utilities + Yr.Sold +
+                       TotRms.AbvGrd + Quatratic_TotRms.AbvGrd,
+                     data = house)
+
+par(mfrow = c(1, 2))
+plot(x = additive_model$fitted.values, y = additive_model$residuals,
+     xlim = c(1.9, 3.8), ylim =c(-1.0, 0.8),
+     xlab="Fitted value", ylab="Residual")
+qqnorm(additive_model$residuals)
+qqline(additive_model$residuals, col = "red")
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+summary(additive_model)
+```
+
+## Multi-collinearity check
+
+calculate VIF to verify that there is not strong correlation between any continuous variables.
+
+why use VIF? What is the advantage of using VIF? Using thumb theory of 10 as cutoff, since every continuous variable does not over 10, so no multi-collinearity.
+
+explain what is multi-collinearity -\> any correlation among explanatory variables (X)
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+house_numeric_only = house[, sapply(house, is.numeric)]
+house_numeric_lreg = lm(log_SalePrice ~ ., data = house_numeric_only)
+
+vif(house_numeric_lreg)
+```
+
+## Model Selection
+
+Original dataset contains 80 columns, we use 14 variables within it.
+
+forward selection
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
+full_model <- lm(log_SalePrice ~ ., data = house)
+
+forward <- ols_step_forward_r2(full_model)
+
+forward$metrics
+```
+
+```{r fig.height=5,fig.width=10}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+
+cp_scores <- numeric(length = length(forward$metrics$variable))
+num_params <- numeric(length = length(forward$metrics$variable))
+cp_diff <- numeric(length = length(forward$metrics$variable))
+
+# Mallow's Cp
+for (i in seq_along(forward$metrics$variable)) {
+  predictors <- forward$metrics$variable[1:i]
+  formula_str <- paste("log_SalePrice ~", paste(predictors, collapse = " + "))
+  model_i <- lm(as.formula(formula_str), data = house)
+  cp_val <- ols_mallows_cp(model_i, full_model)
+  cp_scores[i] <- cp_val
+  num_params[i] <- length(coef(model_i)) + 1
+  cp_diff[i] = cp_val - (length(predictors) + 1)
+}
+
+# AIC
+predictors <- setdiff(names(house), c("log_SalePrice"))
+
+# Initialize
+selected <- c()
+aic_values <- numeric()           # Store AIC at each step
+num_predictors <- numeric()       # Number of predictors at each step
+
+# Start with intercept-only model
+current_formula <- as.formula("log_SalePrice ~ 1")
+current_model <- lm(current_formula, data = house)
+aic_values[1] <- AIC(current_model)
+num_predictors[1] <- 0
+
+# Forward selection loop
+for (i in seq_along(predictors)) {
+  remaining <- setdiff(predictors, selected)
+  
+  # Try adding each remaining variable and calculate AIC
+  aic_candidates <- sapply(remaining, function(var) {
+    temp_formula <- as.formula(paste("log_SalePrice ~", paste(c(selected, var), collapse = " + ")))
+    AIC(lm(temp_formula, data = house))
+  })
+  
+  # Select the variable that gives the lowest AIC
+  best_var <- names(which.min(aic_candidates))
+  selected <- c(selected, best_var)
+  
+  # Refit the model with updated predictors
+  current_formula <- as.formula(paste("log_SalePrice ~", paste(selected, collapse = " + ")))
+  current_model <- lm(current_formula, data = house)
+  
+  # Store metrics
+  aic_values[i + 1] <- AIC(current_model)
+  num_predictors[i + 1] <- length(selected)
+}
+
+
+par(mfrow = c(1, 2))
+# Plot Cp vs p
+plot(
+  num_params - 1,
+  cp_scores, type = "b", pch = 19,
+     xlab = "Number of predictor k",
+     ylab = "Mallow's Cp",
+     main = "Mallow's Cp vs Number of Parameters")
+abline(0, 1, col = "red", lty = 2)
+# abline(v = which.min(which(cp_diff > 0)), col = "blue", lty = 2)
+# Find index of the smallest positive cp_diff
+
+valid_cp <- which(cp_diff > 0)
+best_cp_index <- valid_cp[which.min(cp_diff[valid_cp])]
+
+# Correct vertical line
+abline(v = num_params[best_cp_index] - 1, col = "blue", lty = 2)
+       
+# Plot AIC vs. number of predictors
+plot(0:length(predictors), aic_values, type = "b",
+     xlab = "Number of predictors", ylab = "AIC",
+     main = "Change in AIC with Forward Selection")
+
+min_index <- which.min(aic_values)
+min_num_pred <- num_predictors[min_index]
+abline(v = min_num_pred, col = "red", lty = 2)
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+cp_diff
+```
+
+the difference of cp between 14 and 15 is really small, and the AIC shows that we should use 14.
+
+These two plots shows we can use 14 covariates in our final model.
+
+From the plot of Mallow's CP score, the score more close to number of parameter (p+1) means better
+
+From the plot of AIC, the AIC score lower mean better.
+
+Then we decided to use all covariates from forward selection, which covariate that has strongest relationship during each iteration in the greedy algorithm
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+#using the corvariate that selected by forward selection
+selected_vars = forward$metrics$variable[1:14]
+
+formula_text <- paste("log_SalePrice ~", paste(selected_vars, collapse = " + "))
+simpler_formula <- as.formula(formula_text)
+
+simpler_additive_model <- lm(simpler_formula, data = house)
+summary(simpler_additive_model)
+
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
+# delete the non-significant one, help simplifier the model
+final_vars = selected_vars[selected_vars != "Electrical" & 
+                             selected_vars != "Yr.Sold" &
+                             selected_vars != "Utilities" &
+                             selected_vars != "Quatratic_Year.Built"]
+final_formula_text <- paste("log_SalePrice ~", paste(final_vars, collapse = " + "))
+final_formula <- as.formula(final_formula_text)
+
+final_model <- lm(final_formula, data = house)
+summary(final_model)
+```
+
+```{r fig.height=4,fig.width=15}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+par(mfrow = c(1, 4))
+plot(final_model)
+```
+
+## Interaction Term
+
+We explored all possible interaction of categorical variables (Central.Air, Lot.Shape, Electrical, Utilities) and numeric variables. The fitness of model that includes these interactions increases a little. We only selected significant interaction term and put them into final model `simpler_interactive_model`.
+
+|                           | number of parameter (p) | adj R\^2 |
+|---------------------------|-------------------------|----------|
+| additive_model            | 25                      | 0.8434   |
+| simpler_additive_model    | 22                      | 0.8434   |
+| final_model               | 13                      | 0.8423   |
+| interactive_model         | 39                      | 0.8531   |
+| simpler_interactive_model | 15                      | 0.8443   |
+
+## Outlier, leverage, influence (Limitation)
+
+We identify all potential outliers, leverages and evaluated whether they are influential. It seems that there are lot of outliers and evaluated in our dataset, which cause a limitation or weakness.
+
+```{r fig.height=4,fig.width=4}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+
+influence_data <- influence.measures(final_model)
+leverage <- hatvalues(final_model)
+standardized_residuals <- rstandard(final_model)
+cooks_d <- cooks.distance(final_model)
+
+n <- nrow(house)
+p <- length(coef(final_model))  
+leverage_threshold <- 2 * p / n
+cooks_threshold <- 4 / n
+
+
+plot(leverage, standardized_residuals,
+     xlab = "Leverage", ylab = "Standardized Residuals",
+     main = "Outliers, Leverage, and Influence Points")
+abline(h = c(-2, 2), col = "red", lty = 2)
+abline(v = leverage_threshold, col = "blue", lty = 2)
+
+outlier_points <- which(abs(standardized_residuals) > 2)
+points(leverage[outlier_points], standardized_residuals[outlier_points], col = "red", pch = 19)
+
+leverage_points <- which(leverage > leverage_threshold)
+points(leverage[leverage_points], standardized_residuals[leverage_points], col = "blue", pch = 17)
+
+influence_points <- which(cooks_d > cooks_threshold)
+points(leverage[influence_points], standardized_residuals[influence_points], col = "purple", pch = 4)
+
+legend("topright", legend = c("Outlier", "High Leverage", "Influential"),
+       col = c("red", "blue", "purple"), pch = c(19, 17, 4))
+
+```
+
+## Appendix Interaction Term
+
+```{r fig.height=15, fig.width=15}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+
+library(ggplot2)
+library(rlang)
+library(patchwork)
+
+plot_list <- list()
+final_numeric <- final_vars[final_vars != "Lot.Shape" & final_vars != "Central.Air"]
+
+for (var in final_numeric) {
+  p <- ggplot(house, aes(x = !!sym(var), y = log_SalePrice, color = Central.Air)) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+    labs(
+      title = paste("Interaction:", var, "and Central Air"),
+      x = var,
+      y = "log(SalePrice)"
+    ) +
+    theme_minimal()
+  plot_list[[var]] <- p
+}
+
+wrap_plots(plot_list[1:8], ncol = 3)
+```
+
+```{r fig.height=15,fig.width=15}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: true
+plot_list <- list()
+for (var in final_numeric) {
+  p <- ggplot(house, aes_string(x = var, y = "log_SalePrice", color = "Lot.Shape")) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
+    labs(
+      title = paste("Interaction:", var, "and Lot.Shape"),
+      x = var,
+      y = "log(SalePrice)"
+    ) +
+    theme_minimal()
+  
+  # print(p)
+  plot_list[[var]] <- p
+}
+
+wrap_plots(plot_list[1:8], ncol = 3)
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
+# different slope shown that exists interaction
+interactive_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Year.Built + Garage.Area +
+                   Quatratic_Gr.Liv.Area + Lot.Area + Central.Air + Kitchen.AbvGr + Lot.Shape
+                   + Bedroom.AbvGr + 
+                   
+                   (Year.Built + Garage.Area + Quatratic_Gr.Liv.Area + 
+                      Kitchen.AbvGr + Bedroom.AbvGr):Central.Air + 
+                   (Overall.Qual + Gr.Liv.Area + Year.Built + Garage.Area +
+                   Quatratic_Gr.Liv.Area + Lot.Area + Bedroom.AbvGr):Lot.Shape,
+                   
+                 data = house)
+
+summary(interactive_model)
+```
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
+# delete the not significant one. this can make the model simpler
+simpler_interactive_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Year.Built+ Quatratic_Gr.Liv.Area + Lot.Area +
+                               Kitchen.AbvGr +(Garage.Area + Quatratic_Gr.Liv.Area + Bedroom.AbvGr):Central.Air +
+                               Quatratic_Gr.Liv.Area:Lot.Shape, data = house)
+
+summary(simpler_interactive_model)
+```
