@@ -8,57 +8,6 @@ editor: visual
 
 # Group Project Report
 
-## Table of Contents
-
-1.  Introduction
-    -   Overview and Project Objective
-
-<!-- -->
-
-2.  Dataset Overview & Data Cleaning
-    -   Ames Housing Dataset Description & Data Cleaning and Variable Selection
-
-<!-- -->
-
-3.  Explorative Data Analysis
-    -   Initial Exploration and Visualizations
-
-<!-- -->
-
-4.  Model Diagnostic
-    -   Residuals vs Fitted Plot & Q-Q Plot and Log Transformation
-
-<!-- -->
-
-5.  Log Transformation & Model Rebuilding
-    -   Applying Log Transformation to SalePrice
-
-<!-- -->
-
-6.  Multicollinearity Check
-    -   VIF Values and Multicollinearity
-
-<!-- -->
-
-7.  Model Selection & Final Model Diagnostics
-    -   Forward Selection and Model Comparison & Mallows’ Cp and AIC Analysis
-
-<!-- -->
-
-8.  Interaction Term
-
-    -   Interaction Term Exploration and Model Comparison
-
-9.  Outliers, Leverage, and Influence (Limitation)
-
-    -   Outliers, High Leverage, and Influential Points
-
-10. Discussion and Conclusion
-
-    -   Key Findings and Limitations
-
-11. Appendix & Reference
-
 ## Introduction
 
 Housing is one of the most fundamental elements of our lives, and the volatility in housing prices directly affects many people^1^ (UN, n.d.). As a result, housing prices have become a topic of significant interest, not only as an economic indicator but also in social and personal contexts. The goal of this project was to build a linear regression model to find out the relationship [\[SB1\]](#_msocom_1) house sale prices using the Ames Housing dataset. The dataset includes 2,930 observations and 82 variables, covering aspects such as house size, location, and various other factors in relation to **SalePrice**. Given the large number of variables, we narrowed down the covariates through data cleaning and feature selection to make the dataset manageable. Additionally, we addressed potential violations of regression assumptions by applying transformations to ensure the model's validity.
@@ -101,11 +50,17 @@ After these steps, we finalized a list of 14 variables: 13 covariates and **Sale
 
 -   **Kitchen.AbvGr**: Number of kitchens above ground
 
--   **Lot.Shape**: Shape of the lot (Reg, IR1, IR2, IR3)[\[SB1\]](#_msocom_1) 
+-   **Lot.Shape**: Shape of the lot categorized as Reg (regular), IR1, IR2, and IR3 in order of increasing irregularity
 
--   **Utilities, Electrical, Central.Air, Yr.Sold:** Other relevant categorical/numeric info
+-   **TotRms**.AbvGrd: Total number of rooms above ground
 
-//TODO [\[SB1\]](#_msoanchor_1)More description for IR1...
+-   **Utilities**: Categorical type of utilities available to the property
+
+-   **Electrical**: Categorical type of electrical system installed in the house
+
+-   **Central.Air**: Status of central air conditioning (Y, N)
+
+-   **Yr.Sold**: Other relevant categorical/numeric info
 
 As for data cleaning, we didn’t need to do any restructuring since the dataset came in clean CSV format. But we did some basic prep work: for instance, we converted character-based categorical variables like **Lot.Shape** into factor type using as.factor(). We also checked for missing values using `colSums(is.na())`, but since we already removed problematic variables, our final dataset was clean.
 
@@ -150,17 +105,17 @@ Before modeling[\[SB1\]](#_msocom_1) , we visualized the relationship between *
 
 //TODO [\[SB1\]](#0)Discuss later whether we mention we need log trans
 
-```{r fig.height=8,fig.width=8}
+```{r fig.height=4.5,fig.width=16}
 #| echo: false
 #| message: false
 #| warning: false
 #| output: true
 
-par(mfrow = c(2, 2))
-boxplot(house$SalePrice~house$Lot.Shape)
-boxplot(house$SalePrice~house$Utilities)
-boxplot(house$SalePrice~house$Electrical)
-boxplot(house$SalePrice~house$Central.Air)
+par(mfrow = c(1, 4))
+boxplot(house$SalePrice~house$Lot.Shape, ylab="Sale Price (10,000$)", xlab="Lot Shape")
+boxplot(house$SalePrice~house$Utilities, ylab="Sale Price (10,000$)", xlab="Utilities")
+boxplot(house$SalePrice~house$Electrical, ylab="Sale Price (10,000$)", xlab="Electrical")
+boxplot(house$SalePrice~house$Central.Air, ylab="Sale Price (10,000$)", xlab="Central.Air")
 ```
 
 Right skew show on the plot is a signal a do log(Y) transformation + assumption check also
@@ -202,7 +157,7 @@ To address the issues we found in the diagnostic plots—like the funnel-shaped 
 
 After applying the transformation, we examined the scatterplots between **log(SalePrice)** and each continuous parameter. As shown in the figure below, the relationships with **Overall.Qual**, and **Gr.Liv.Area** appear more linear after the log transformation, which suggests the model is now better suited for linear regression.
 
-```{r fig.height=10,fig.width=10}
+```{r fig.height=4.5,fig.width=16}
 #| echo: false
 #| message: false
 #| warning: false
@@ -214,10 +169,10 @@ house$SalePrice <- log(house$SalePrice)
 names(house)[names(house) == "SalePrice"] <- "log_SalePrice"
 
 num_vars <- names(house)[sapply(house, is.numeric)]
-predictors <- setdiff(num_vars, c("SalePrice", "log_SalePrice"))
+predictors <- setdiff(num_vars, c("SalePrice", "log_SalePrice", "Overall.Qual", "Lot.Area", "Bedroom.AbvGr", "Kitchen.AbvGr", "Yr.Sold"))
 
 # options(repr.plot.width = 15, repr.plot.height = 10)
-par(mfrow = c(3, 3))
+par(mfrow = c(1, 4))
 
 for (var in predictors) {
   plot(house[[var]], house$log_SalePrice, pch=19,
@@ -387,9 +342,9 @@ par(mfrow = c(1, 2))
 plot(
   num_params - 1,
   cp_scores, type = "b", pch = 19,
-     xlab = "Number of predictor k",
+     xlab = "Number of Predictors k",
      ylab = "Mallow's Cp",
-     main = "Mallow's Cp vs Number of Parameters")
+     main = "Mallow's Cp vs Number of Covariates")
 abline(0, 1, col = "red", lty = 2)
 # abline(v = which.min(which(cp_diff > 0)), col = "blue", lty = 2)
 # Find index of the smallest positive cp_diff
@@ -402,7 +357,7 @@ abline(v = num_params[best_cp_index] - 1, col = "blue", lty = 2)
        
 # Plot AIC vs. number of predictors
 plot(0:length(predictors), aic_values, type = "b",
-     xlab = "Number of predictors", ylab = "AIC",
+     xlab = "Number of Predictors", ylab = "AIC",
      main = "Change in AIC with Forward Selection")
 
 min_index <- which.min(aic_values)
@@ -448,7 +403,7 @@ summary(simpler_additive_model)
 #| echo: false
 #| message: false
 #| warning: false
-#| output: false
+#| output: true
 
 # delete the non-significant one, help simplifier the model
 final_vars = selected_vars[selected_vars != "Electrical" & 
@@ -590,7 +545,7 @@ wrap_plots(plot_list[1:8], ncol = 3)
 #| output: true
 plot_list <- list()
 for (var in final_numeric) {
-  p <- ggplot(house, aes_string(x = var, y = "log_SalePrice", color = "Lot.Shape")) +
+  p <- ggplot(house, aes(x = .data[[var]], y = log_SalePrice, color = Lot.Shape)) +
     geom_point(alpha = 0.5) +
     geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
     labs(
