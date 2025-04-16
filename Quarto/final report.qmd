@@ -3,6 +3,12 @@ title: "STAT 306 2024W2 - Project: Report"
 format: 
   pdf:
     fontsize: 10pt
+    documentclass: article
+    geometry: margin=1in
+execute: 
+  echo: false
+  message: false
+  warning: false
 editor: visual
 ---
 
@@ -67,9 +73,6 @@ As for data cleaning, we didn’t need to do any restructuring since the dataset
 Finally, we adjusted a few column types—like turning **Year.Built** and **Bedroom.AbvGr** into integers—to make the modeling process easier. We also ran `summary()` to explore the variable distributions and noticed some skewed distributions and outliers, especially in **SalePrice**, which we handled later with log transformation.
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: false
 
 library(car)
@@ -106,9 +109,6 @@ Before modeling[\[SB1\]](#_msocom_1) , we visualized the relationship between *
 //TODO [\[SB1\]](#0)Discuss later whether we mention we need log trans
 
 ```{r fig.height=4.5,fig.width=16}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 
 par(mfrow = c(1, 4))
@@ -131,9 +131,6 @@ These issues imply that our model could have non-constant variance and heavy-tai
 //TODO [\[SB1\]](#0)Too difficult term for reader -\> easy way to describe -\> expect more data points..
 
 ```{r fig.height=4,fig.width=8}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 full_model = lm(SalePrice ~ ., data = house)
 
@@ -158,9 +155,6 @@ To address the issues we found in the diagnostic plots—like the funnel-shaped 
 After applying the transformation, we examined the scatterplots between **log(SalePrice)** and each continuous parameter. As shown in the figure below, the relationships with **Overall.Qual**, and **Gr.Liv.Area** appear more linear after the log transformation, which suggests the model is now better suited for linear regression.
 
 ```{r fig.height=4.5,fig.width=16}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 # Replace SalePrice values with log-transformed values
 house$SalePrice <- log(house$SalePrice)
@@ -197,9 +191,6 @@ However, the variable **Year.Built** still showed some curvature, even after the
 After refitting the model using `log(SalePrice)` as the response variable, the residuals appeared more randomly scattered, and the Q-Q plot aligned more closely with the theoretical line. These improvements suggest that the key regression assumptions are now better satisfied, making the model more suitable for inference.
 
 ```{r fig.height=4,fig.width=8}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 # options(repr.plot.width = 7, repr.plot.height = 7)
 house$Quatratic_Gr.Liv.Area = (house$Gr.Liv.Area-mean(house$Gr.Liv.Area))^2
@@ -227,9 +218,6 @@ qqline(additive_model$residuals, col = "red")
 *Fig.4: Model Diagnostics After log(SalePrice) Transformation: Residuals vs Fitted and Q-Q Plot*
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: false
 summary(additive_model)
 ```
@@ -239,9 +227,6 @@ summary(additive_model)
 Before finalizing the model, we checked for multicollinearity among the predictors using the Variance Inflation Factor (VIF). This helps to identify if any of the explanatory variables are highly correlated with each other, which can distort the interpretation of the regression coefficients. We used the commonly accepted threshold of 10, and all VIF values were well below that level. The highest was around 5.4 for `Gr.Liv.Area`, which is still considered acceptable. This suggests that multicollinearity is not a serious concern in our model, and the predictors are sufficiently independent to proceed with regression analysis.
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 house_numeric_only = house[, sapply(house, is.numeric)]
 house_numeric_lreg = lm(log_SalePrice ~ ., data = house_numeric_only)
@@ -266,9 +251,6 @@ Following the principle of parsimony, we decided to go with the simplest model, 
 //TODO [\[SB3\]](#0)Change the plot’s x axis title Covariate? Predictor? what else
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: false
 
 full_model <- lm(log_SalePrice ~ ., data = house)
@@ -279,9 +261,6 @@ forward$metrics
 ```
 
 ```{r fig.height=5,fig.width=10}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 
 cp_scores <- numeric(length = length(forward$metrics$variable))
@@ -368,9 +347,6 @@ abline(v = min_num_pred, col = "red", lty = 2)
 *Fig 6: Model Selection using Mallows’ Cp and AIC*
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: false
 cp_diff
 ```
@@ -384,9 +360,6 @@ The scale-location plot did not show any clear trends, suggesting that the varia
 These diagnostic results suggest that the final model meets the assumptions required for linear regression, making it suitable for interpretation and further analysis.
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: false
 #using the corvariate that selected by forward selection
 selected_vars = forward$metrics$variable[1:14]
@@ -400,9 +373,6 @@ summary(simpler_additive_model)
 ```
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 
 # delete the non-significant one, help simplifier the model
@@ -418,9 +388,6 @@ summary(final_model)
 ```
 
 ```{r fig.height=4,fig.width=15}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 par(mfrow = c(1, 4))
 plot(final_model)
@@ -451,9 +418,6 @@ The fit of the model with interactions improved slightly, but for the sake of mo
 After building our model, we examined the potential outliers, leverage points, and influential data points. This step helps in assessing the reliability of the model and identifying any data points that might distort the results. The plot above highlights the outliers, points with high leverage, and influential data points in our dataset.
 
 ```{r fig.height=4,fig.width=4}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 
 influence_data <- influence.measures(final_model)
@@ -510,9 +474,6 @@ Overall, the model shows promising performance, but there is still room for impr
 ## Appendix Interaction Term
 
 ```{r fig.height=15, fig.width=15}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 
 library(ggplot2)
@@ -539,9 +500,6 @@ wrap_plots(plot_list[1:8], ncol = 3)
 ```
 
 ```{r fig.height=15,fig.width=15}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: true
 plot_list <- list()
 for (var in final_numeric) {
@@ -563,9 +521,6 @@ wrap_plots(plot_list[1:8], ncol = 3)
 ```
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: false
 
 # different slope shown that exists interaction
@@ -584,9 +539,6 @@ summary(interactive_model)
 ```
 
 ```{r}
-#| echo: false
-#| message: false
-#| warning: false
 #| output: false
 
 # delete the not significant one. this can make the model simpler
