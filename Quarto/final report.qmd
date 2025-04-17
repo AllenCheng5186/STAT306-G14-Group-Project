@@ -5,10 +5,12 @@ format:
     fontsize: 10pt
     documentclass: article
     geometry: margin=1in
+
 execute: 
   echo: false
   message: false
   warning: false
+
 editor: visual
 ---
 
@@ -16,7 +18,7 @@ editor: visual
 
 ## Introduction
 
-Housing is one of the most fundamental elements of our lives, and the volatility in housing prices directly affects many people^1^ (UN, n.d.). As a result, housing prices have become a topic of significant interest, not only as an economic indicator but also in social and personal contexts. The goal of this project was to build a linear regression model to find out the relationship between house **sale prices** and **living area**, **number of bedrooms above ground** and **overall quality rating** using the Ames Housing dataset. The dataset includes 2,930 observations and 82 variables, covering aspects such as house size, location, and various other factors in relation to **SalePrice**. Given the large number of variables, we narrowed down the covariates through data cleaning and feature selection to make the dataset manageable. Additionally, we addressed potential violations of regression assumptions by applying transformations to ensure the model's validity.
+Housing is one of the most fundamental elements of our lives, and the volatility in housing prices directly affects many people^1^ (UN, n.d.). As a result, housing prices have become a topic of significant interest, not only as an economic indicator but also in social and personal contexts. The goal of this project was to build a linear regression model to find out the relationship between house **sale prices** and **living area** (`Gr.Liv.Area`), **number of bedrooms above ground** (`Bedroom.AbvGr`) and **construction year** (`Year.Built`) using the Ames Housing dataset. The dataset includes 2,930 observations and 82 variables, covering aspects such as house size, location, and various other factors in relation to **SalePrice**. Given the large number of variables, we narrowed down the covariates through data cleaning and feature selection to make the dataset manageable. Additionally, we addressed potential violations of regression assumptions by applying transformations to ensure the model's validity.
 
 During the model-building process, we examined linear relationships and applied variable transformations to address issues like non-constant variance and heavy-tailed residual distribution. We also used forward selection to choose the most appropriate covariates. After selecting the final model, we performed diagnostic checks and considered the impact of outliers and high leverage points. Finally, we explored the effects of interaction terms between categorical and numerical variables.
 
@@ -173,17 +175,7 @@ for (var in predictors) {
 }
 ```
 
-However, the variable **Year.Built** still showed some curvature, even after the transformation. To capture this non-linear pattern[\[SB1\]](#_msocom_1) [\[SB2\]](#_msocom_2) [\[SB3\]](#_msocom_3) [\[SB4\]](#_msocom_4) , we included a quadratic term for `Year.Built` in the model:
-
-// TODO [\[SB1\]](#_msoanchor_1)+ avoid multicollien.
-
-// TODO [\[SB2\]](#_msoanchor_2)+ formula : why we follow this formula as mathematic way?
-
-  -\> many explain..? -\> just mention muliti colli….
-
-// TODO [\[SB3\]](#_msoanchor_3)Correct formula
-
-// TODO[\[SB4\]](#_msoanchor_4)Attach latex $$(X_{Year.Built}- \bar{X_{Year.Built}})^2$$
+However, the variable **Year.Built** still showed some curvature, even after the transformation. To capture this non-linear pattern, we included a quadratic term for `Year.Built` in the model: $$(X_{Year.Built}- \bar{X_{Year.Built}})^2$$
 
 After refitting the model using `log(SalePrice)` as the response variable, the residuals appeared more randomly scattered, and the Q-Q plot aligned more closely with the theoretical line. These improvements suggest that the key regression assumptions are now better satisfied, making the model more suitable for inference.
 
@@ -248,7 +240,7 @@ vif_table %>%
 
 ## **Model Selection**
 
-To select the final set of explanatory variables, we used forward selection. Starting with an empty model, we added variables one by one based on how much they improved the model fit. Although the original dataset contained over 80 variables, we narrowed it down to 14 after filtering and diagnostic checks[\[SB1\]](#_msocom_1) [\[SB2\]](#_msocom_2) .
+To select the final set of explanatory variables, we used forward selection. Starting with an empty model, we added variables one by one based on how much they improved the model fit. Although the original dataset contained over 80 variables, we narrowed it down to 14 after filtering and diagnostic checks.
 
 To determine the best stopping point, we considered both Mallows' Cp and AIC values. The Cp plot showed that the score stabilized around 14 variables, with little improvement beyond that. AIC also reached its lowest point with 14 predictors.
 
@@ -257,8 +249,6 @@ Following the principle of parsimony, we decided to go with the simplest model, 
 //TODO [\[SB1\]](#0)We include the quad term
 
 //TODO [\[SB2\]](#_msoanchor_2)(includes quadratic terms
-
-//TODO [\[SB3\]](#0)Change the plot’s x axis title Covariate? Predictor? what else
 
 ```{r}
 #| output: false
@@ -401,7 +391,7 @@ par(mfrow = c(1, 4))
 plot(final_model)
 ```
 
-Fig. 7: Final Model Diagnostics, Assumption Check, Scale-Location and Residuals vs Leverage Plots for Final Model
+*Fig. 7: Final Model Diagnostics, Assumption Check, Scale-Location and Residuals vs Leverage Plots for Final Model*
 
 ## **Interaction Term**
 
@@ -465,30 +455,44 @@ legend("topright", legend = c("Outlier", "High Leverage", "Influential"),
 
 -   **Influential points** (shown as purple crosses) are points that have both high leverage and residuals that significantly deviate from the model's predictions. These points can have a major effect on the regression coefficients and, therefore, on the overall model results.
 
-In our case, we observed that there are a significant number of outliers and high leverage points in the data, which may pose limitations to the model. The presence of these points suggests that the model may be sensitive to these extreme values, which could lead to less reliable predictions and affect the generalizability of the results. These outliers and influential points need to be carefully addressed, either by transforming the data or removing problematic points, to ensure the robustness of the model. + confounding variables (+refer)[\[SB1\]](#_msocom_1) 
-
-//TODO [\[SB1\]](#0)Nega -\> confouding. And add some reference to descirbe
+In our case, we observed that there are a significant number of outliers and high leverage points in the data, which may pose limitations to the model. The presence of these points suggests that the model may be sensitive to these extreme values, which could lead to less reliable predictions and affect the generalizability of the results. These outliers and influential points need to be carefully addressed, either by transforming the data or removing problematic points, to ensure the robustness of the model.
 
 ## Final Model
 
-```{r}
+After log transformation, multi-collinearity check, model selection, and interaction term investigation, our final model of choice uses the logarithm of sale prices with covariates being overall quality rating (`Overall.Qual`), above-ground living area (`Gr.Liv.Area`), construction year (`Year.Built`), garage area (`Garage.Area`), squared above-ground living area(`Quatratic_Gr.Liv.Area`), lot size(`Lot.Area`), status of central air conditioning (`Central.AirY`), number of kitchens above ground (`Kitchen.AbvGr`), shape of the lot (`Lot.Shape`) and number of bedroom above ground (`Bedroom.AbvGr`). This model satisfy linear relationship, homoscedasticity and variance normality assumption. Based on the principle of parsimony, it have relative high adjusted $R^2$ of $0.8423$ and use fewer covariates. Almost every coefficient are significantly different from 0 at significant level 5% in the hypothesis test.
+
+```{r, results='asis'}
 #| output: true
 
 # summary(final_model)
 
-tidy(final_model) %>%
-  kable(digits = 3, caption = "Summary of Final Model")
+coef_tbl <- tidy(final_model)
+
+model_stats <- glance(final_model) %>%
+  select(r.squared, adj.r.squared) %>%
+  mutate(across(everything(), round, 3))
+
+coef_tbl %>%
+  mutate(across(where(is.numeric), round, 3)) %>%
+  kable(caption = "Summary of Final Model")
+
+cat(paste0(
+  "\\begin{center}\n",
+  "\\textbf{Model $R^2$:} ", round(model_stats$r.squared, 4),
+  " \\quad \\textbf{Adjusted $R^2$:} ", round(model_stats$adj.r.squared, 4),
+  "\n\\end{center}\n"
+))
 ```
 
-## **Discussion and Conclusion** [\[SB1\]](#_msocom_1) 
+## **Discussion and Conclusion**
 
-In conclusion, the final linear regression model based on 14 predictor variables satisfies the essential assumptions for regression analysis and provides meaningful insights into the key factors affecting house prices. By applying a log transformation to `SalePrice`, we stabilized the variance and made the error distribution more normal, addressing the issues found in the initial model’s diagnostic plots. We also used forward selection to refine the model by selecting only the most relevant variables.
+In conclusion, the final linear regression model based on 13 predictor variables satisfies the essential assumptions for regression analysis and provides meaningful insights into the key factors affecting house prices. By applying a log transformation to `SalePrice`, we stabilized the variance and made the error distribution more normal, addressing the issues found in the initial model’s diagnostic plots. We used forward selection to refine the model by selecting only the most relevant variables.
+
+In our final model, we selected $13$ covariates along with the logarithmic transformation of sale price, specifically modeling `log(SalePrice/10000)` as the response variable. This model directly addresses the primary research question posed in the introduction. We found that for every additional square foot of living area (`Gr.Liv.Area`), the expected log-transformed sale price increases by approximately $0.0004$ (p \< 0.001), indicating a strong and statistically significant relationship. On the original scale, this corresponds to an approximate $0.04\%$ increase in sale price per additional square foot—a small but cumulative effect, consistent with expectations that larger homes command higher prices. Interestingly, the number of bedrooms above grade (`Bedroom.AbvGr`) was associated with a $2.6\%$ decrease in expected sale price for each additional bedroom, holding other variables constant. Although counterintuitive, this negative association persisted even after exploring interaction terms, suggesting the possibility of confounding. For example, homes with more bedrooms may be of lower overall quality or have smaller room sizes. Kassab (n.d.) offers a relevant interpretation: increasing the number of bedrooms and bathrooms while holding total area constant can reduce a home’s appeal, as it divides space into smaller rooms and diminishes perceived spaciousness. Additionally, the year of construction (`Year.Built`) was positively associated with sale price. Each one-year increase corresponds to an estimated $0.002$ increase in the log-transformed sale price, or roughly a $0.2\%$ increase in actual sale price, indicating that newer homes tend to be more valuable. Overall, our findings provide insights for both homebuyers and sellers in Ames, Iowa: newer homes with larger living areas and fewer bedrooms tend to achieve higher market values.
 
 However, a few limitations were identified in the analysis. Outliers, high leverage points, and influential data points suggest that the model is sensitive to extreme values. These issues were addressed during the diagnostic phase, but further exploration and refinement may be needed to ensure the robustness of the model. The model with interaction terms showed a slight improvement in fit, but for simplicity, only the most significant interaction terms were included in the final model.
 
 Overall, the model shows promising performance, but there is still room for improvement by addressing outliers and considering more complex interactions. As a result, this model provides a solid foundation for understanding the key factors influencing house prices, but further refinements are needed to enhance its predictive power and generalizability.
-
-//TODO [\[SB1\]](#0)Which top 3 we are describing ?
 
 ## Appendix Interaction Term
 
@@ -567,3 +571,7 @@ simpler_interactive_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Year
 
 summary(simpler_interactive_model)
 ```
+
+## References
+
+Kassab, T. (n.d.). *Multivariate Real-Estate Modeling: Bayesian and Frequentist Methods*. Retrieved April 16, 2025, from https://rstudio-pubs-static.s3.amazonaws.com/373107_1168996f5a8f470f8630e08f6aa2df3a.html
