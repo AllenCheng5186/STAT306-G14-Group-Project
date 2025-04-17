@@ -240,15 +240,11 @@ vif_table %>%
 
 ## **Model Selection**
 
-To select the final set of explanatory variables, we used forward selection. Starting with an empty model, we added variables one by one based on how much they improved the model fit. Although the original dataset contained over 80 variables, we narrowed it down to 14 after filtering and diagnostic checks.
+To select the final set of explanatory variables, we used forward selection. Starting with an empty model, we added variables one by one based on how much they improved the model fit. Although the original dataset contained over 80 variables, we narrowed it down to 14 (includes quadratic terms) after filtering and diagnostic checks.
 
 To determine the best stopping point, we considered both Mallows' Cp and AIC values. The Cp plot showed that the score stabilized around 14 variables, with little improvement beyond that. AIC also reached its lowest point with 14 predictors.
 
-Following the principle of parsimony, we decided to go with the simplest model, selecting 14 variables as the final choice. [\[SB3\]](#_msocom_3) 
-
-//TODO [\[SB1\]](#0)We include the quad term
-
-//TODO [\[SB2\]](#_msoanchor_2)(includes quadratic terms
+Following the principle of parsimony, we decided to go with the simplest model, selecting 14 variables as the final choice.
 
 ```{r}
 #| output: false
@@ -470,10 +466,10 @@ coef_tbl <- tidy(final_model)
 
 model_stats <- glance(final_model) %>%
   select(r.squared, adj.r.squared) %>%
-  mutate(across(everything(), round, 3))
+  mutate(across(everything(), round, 4))
 
 coef_tbl %>%
-  mutate(across(where(is.numeric), round, 3)) %>%
+  mutate(across(where(is.numeric), round, 4)) %>%
   kable(caption = "Summary of Final Model")
 
 cat(paste0(
@@ -488,7 +484,7 @@ cat(paste0(
 
 In conclusion, the final linear regression model based on 13 predictor variables satisfies the essential assumptions for regression analysis and provides meaningful insights into the key factors affecting house prices. By applying a log transformation to `SalePrice`, we stabilized the variance and made the error distribution more normal, addressing the issues found in the initial model’s diagnostic plots. We used forward selection to refine the model by selecting only the most relevant variables.
 
-In our final model, we selected $13$ covariates along with the logarithmic transformation of sale price, specifically modeling `log(SalePrice/10000)` as the response variable. This model directly addresses the primary research question posed in the introduction. We found that for every additional square foot of living area (`Gr.Liv.Area`), the expected log-transformed sale price increases by approximately $0.0004$ (p \< 0.001), indicating a strong and statistically significant relationship. On the original scale, this corresponds to an approximate $0.04\%$ increase in sale price per additional square foot—a small but cumulative effect, consistent with expectations that larger homes command higher prices. Interestingly, the number of bedrooms above grade (`Bedroom.AbvGr`) was associated with a $2.6\%$ decrease in expected sale price for each additional bedroom, holding other variables constant. Although counterintuitive, this negative association persisted even after exploring interaction terms, suggesting the possibility of confounding. For example, homes with more bedrooms may be of lower overall quality or have smaller room sizes. Kassab (n.d.) offers a relevant interpretation: increasing the number of bedrooms and bathrooms while holding total area constant can reduce a home’s appeal, as it divides space into smaller rooms and diminishes perceived spaciousness. Additionally, the year of construction (`Year.Built`) was positively associated with sale price. Each one-year increase corresponds to an estimated $0.002$ increase in the log-transformed sale price, or roughly a $0.2\%$ increase in actual sale price, indicating that newer homes tend to be more valuable. Overall, our findings provide insights for both homebuyers and sellers in Ames, Iowa: newer homes with larger living areas and fewer bedrooms tend to achieve higher market values.
+In our final model, we selected $13$ predictors along with the logarithmic transformation of sale price, specifically modeling `log(SalePrice/10000)` as the response variable. This model directly addresses the primary research question posed in the introduction. We found that for every additional square foot of living area (`Gr.Liv.Area`), the expected log-transformed sale price increases by approximately $0.0004$ (p \< 0.001), indicating a strong and statistically significant relationship. On the original scale, this corresponds to an approximate $0.04\%$ increase in sale price per additional square foot—a small but cumulative effect, consistent with expectations that larger homes command higher prices. Interestingly, the number of bedrooms above grade (`Bedroom.AbvGr`) was associated with a $2.6\%$ decrease in expected sale price for each additional bedroom, holding other variables constant. Although counterintuitive, this negative association persisted even after exploring interaction terms, suggesting the possibility of confounding. For example, homes with more bedrooms may be of lower overall quality or have smaller room sizes. Kassab (n.d.) offers a relevant interpretation: increasing the number of bedrooms and bathrooms while holding total area constant can reduce a home’s appeal, as it divides space into smaller rooms and diminishes perceived spaciousness. Additionally, the year of construction (`Year.Built`) was positively associated with sale price. Each one-year increase corresponds to an estimated $0.002$ increase in the log-transformed sale price, or roughly a $0.2\%$ increase in actual sale price, indicating that newer homes tend to be more valuable. Overall, our findings provide insights for both homebuyers and sellers in Ames, Iowa: newer homes with larger living areas and fewer bedrooms tend to achieve higher market values.
 
 However, a few limitations were identified in the analysis. Outliers, high leverage points, and influential data points suggest that the model is sensitive to extreme values. These issues were addressed during the diagnostic phase, but further exploration and refinement may be needed to ensure the robustness of the model. The model with interaction terms showed a slight improvement in fit, but for simplicity, only the most significant interaction terms were included in the final model.
 
@@ -543,8 +539,8 @@ for (var in final_numeric) {
 wrap_plots(plot_list[1:8], ncol = 3)
 ```
 
-```{r}
-#| output: false
+```{r, results='asis'}
+#| output: true
 
 # different slope shown that exists interaction
 interactive_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Year.Built + Garage.Area +
@@ -558,20 +554,47 @@ interactive_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Year.Built +
                    
                  data = house)
 
-summary(interactive_model)
+# summary(interactive_model)
+
+interactive_summary <- tidy(interactive_model)
+interactive_stats <- glance(interactive_model)
+
+kable(interactive_summary, digits = 3, caption = "Summary of Interactive Model")
+
+cat(paste0(
+  "\\begin{center}\n",
+  "\\textbf{Model $R^2$:} ", round(interactive_stats$r.squared, 4),
+  " \\quad \\textbf{Adjusted $R^2$:} ", round(interactive_stats$adj.r.squared, 4),
+  "\n\\end{center}\n"
+))
 ```
 
-```{r}
-#| output: false
+```{r, results='asis'}
+#| output: true
 
 # delete the not significant one. this can make the model simpler
 simpler_interactive_model = lm(log_SalePrice ~ Overall.Qual + Gr.Liv.Area + Year.Built+ Quatratic_Gr.Liv.Area + Lot.Area +
                                Kitchen.AbvGr +(Garage.Area + Quatratic_Gr.Liv.Area + Bedroom.AbvGr):Central.Air +
                                Quatratic_Gr.Liv.Area:Lot.Shape, data = house)
 
-summary(simpler_interactive_model)
+# summary(simpler_interactive_model)
+simpler_summary <- tidy(simpler_interactive_model)
+simpler_stats <- glance(simpler_interactive_model)
+
+kable(simpler_summary, digits = 3, caption = "Summary of Simpler Interactive Model")
+
+cat(paste0(
+  "\\begin{center}\n",
+  "\\textbf{Model $R^2$:} ", round(simpler_stats$r.squared, 4),
+  " \\quad \\textbf{Adjusted $R^2$:} ", round(simpler_stats$adj.r.squared, 4),
+  "\n\\end{center}\n"
+))
 ```
 
 ## References
 
 Kassab, T. (n.d.). *Multivariate Real-Estate Modeling: Bayesian and Frequentist Methods*. Retrieved April 16, 2025, from https://rstudio-pubs-static.s3.amazonaws.com/373107_1168996f5a8f470f8630e08f6aa2df3a.html
+
+Office of the United Nations High Commissioner for Human Rights. (n.d.). The human right to adequate housing. United Nations. Retrieved April 10, 2025, from https://www.ohchr.org/en/special-procedures/sr-housing/human-right-adequate-housing
+
+Reinhart, A. (2019, August 14). House prices in Ames, Iowa. CMU S&DS Data Repository. https://cmustatistics.github.io/data-repository/money/ames-housing.html
