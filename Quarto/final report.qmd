@@ -16,11 +16,9 @@ editor: visual
 
 ## Introduction
 
-Housing is one of the most fundamental elements of our lives, and the volatility in housing prices directly affects many people^1^ (UN, n.d.). As a result, housing prices have become a topic of significant interest, not only as an economic indicator but also in social and personal contexts. The goal of this project was to build a linear regression model to find out the relationship [\[SB1\]](#_msocom_1) house sale prices using the Ames Housing dataset. The dataset includes 2,930 observations and 82 variables, covering aspects such as house size, location, and various other factors in relation to **SalePrice**. Given the large number of variables, we narrowed down the covariates through data cleaning and feature selection to make the dataset manageable. Additionally, we addressed potential violations of regression assumptions by applying transformations to ensure the model's validity.
+Housing is one of the most fundamental elements of our lives, and the volatility in housing prices directly affects many people^1^ (UN, n.d.). As a result, housing prices have become a topic of significant interest, not only as an economic indicator but also in social and personal contexts. The goal of this project was to build a linear regression model to find out the relationship between house **sale prices** and **living area**, **number of bedrooms above ground** and **overall quality rating** using the Ames Housing dataset. The dataset includes 2,930 observations and 82 variables, covering aspects such as house size, location, and various other factors in relation to **SalePrice**. Given the large number of variables, we narrowed down the covariates through data cleaning and feature selection to make the dataset manageable. Additionally, we addressed potential violations of regression assumptions by applying transformations to ensure the model's validity.
 
 During the model-building process, we examined linear relationships and applied variable transformations to address issues like non-constant variance and heavy-tailed residual distribution. We also used forward selection to choose the most appropriate covariates. After selecting the final model, we performed diagnostic checks and considered the impact of outliers and high leverage points. Finally, we explored the effects of interaction terms between categorical and numerical variables.
-
-//TODO [\[SB1\]](#0)Choose at most 3 explanatory variables & their relationship with response variable (salesprice)
 
 ## **Dataset Overview & Data Cleaning**
 
@@ -82,6 +80,7 @@ library(kableExtra)
 library(olsrr)
 library(ggplot2)
 library(patchwork)
+library(broom)
 
 # options(repr.matrix.max.rows = 20)
 
@@ -104,9 +103,7 @@ head(house)
 
 ## Explorative Data Analysis
 
-Before modeling[\[SB1\]](#_msocom_1) , we visualized the relationship between **SalePrice** and some categorical variables using boxplots. For example, houses with **Central Air** tended to have higher sale prices than those without it, and homes with **SBrkr** electrical systems also showed higher average prices compared to other types.
-
-//TODO [\[SB1\]](#0)Discuss later whether we mention we need log trans
+Before modeling, we visualized the relationship between **SalePrice** and some categorical variables using boxplots. For example, houses with **Central Air** tended to have higher sale prices than those without it, and homes with **SBrkr** electrical systems also showed higher average prices compared to other types.
 
 ```{r fig.height=4.5,fig.width=16}
 #| output: true
@@ -118,17 +115,17 @@ boxplot(house$SalePrice~house$Electrical, ylab="Sale Price (10,000$)", xlab="Ele
 boxplot(house$SalePrice~house$Central.Air, ylab="Sale Price (10,000$)", xlab="Central.Air")
 ```
 
-Right skew show on the plot is a signal a do log(Y) transformation + assumption check also
+*Fig 1: Boxplots of SalePrice by Lot Shape, Utilities Electrical System and Central Air*
 
-## **Model Diagnostic**
+From above boxplots, we notices that there are observed right skew on the majority of the categories, which is a signal to do log transformation on response variable. We will confirm the necessity of log transformation in the following model diagnosis with residual plot and qqplot.
+
+## **Model Diagnosis**
 
 To check if our linear regression model satisfied the required assumptions, we examined two key diagnostic plots: the residuals vs fitted values plot and the Q-Q plot.
 
 In the residuals vs fitted values plot, we observed a funnel shape, where the spread of residuals increased as the fitted values grew, indicating a violation of the homoscedasticity assumption (the assumption that the variance of errors is constant). Additionally, in the Q-Q plot, the residuals deviated from the theoretical reference line, especially at the tails, suggesting that the normality assumption might not hold.
 
-These issues imply that our model could have non-constant variance and heavy-tailed residual distribution[\[SB1\]](#_msocom_1) , which can affect the validity of statistical inferences. To address this, we decided to apply a log transformation to the **SalePrice** variable.
-
-//TODO [\[SB1\]](#0)Too difficult term for reader -\> easy way to describe -\> expect more data points..
+These issues imply that our model could have non-constant variance and heavy-tailed residual distribution, which can affect the validity of statistical inferences. To address this, we decided to apply a log transformation to the **SalePrice** variable.
 
 ```{r fig.height=4,fig.width=8}
 #| output: true
@@ -231,7 +228,20 @@ Before finalizing the model, we checked for multicollinearity among the predicto
 house_numeric_only = house[, sapply(house, is.numeric)]
 house_numeric_lreg = lm(log_SalePrice ~ ., data = house_numeric_only)
 
-vif(house_numeric_lreg)
+library(dplyr)
+
+# vif(house_numeric_lreg)
+vif_table <- car::vif(house_numeric_lreg)
+
+# If it's a named vector, convert it to a data frame
+if (is.numeric(vif_table)) {
+  vif_table <- tibble::enframe(vif_table, name = "Variable", value = "VIF")
+}
+
+# Round and print nicely
+vif_table %>%
+  mutate(VIF = round(VIF, 2)) %>%
+  kable(caption = "Variance Inflation Factors (VIF) for Final Model")
 ```
 
 *Fig 5: VIF Values for Explanatory Variables*
@@ -369,11 +379,10 @@ simpler_formula <- as.formula(formula_text)
 
 simpler_additive_model <- lm(simpler_formula, data = house)
 summary(simpler_additive_model)
-
 ```
 
 ```{r}
-#| output: true
+#| output: false
 
 # delete the non-significant one, help simplifier the model
 final_vars = selected_vars[selected_vars != "Electrical" & 
@@ -384,7 +393,6 @@ final_formula_text <- paste("log_SalePrice ~", paste(final_vars, collapse = " + 
 final_formula <- as.formula(final_formula_text)
 
 final_model <- lm(final_formula, data = house)
-summary(final_model)
 ```
 
 ```{r fig.height=4,fig.width=15}
@@ -417,8 +425,9 @@ The fit of the model with interactions improved slightly, but for the sake of mo
 
 After building our model, we examined the potential outliers, leverage points, and influential data points. This step helps in assessing the reliability of the model and identifying any data points that might distort the results. The plot above highlights the outliers, points with high leverage, and influential data points in our dataset.
 
-```{r fig.height=4,fig.width=4}
+```{r fig.height=4,fig.width=5}
 #| output: true
+#| fig.align: center
 
 influence_data <- influence.measures(final_model)
 leverage <- hatvalues(final_model)
@@ -448,7 +457,6 @@ points(leverage[influence_points], standardized_residuals[influence_points], col
 
 legend("topright", legend = c("Outlier", "High Leverage", "Influential"),
        col = c("red", "blue", "purple"), pch = c(19, 17, 4))
-
 ```
 
 -   **Outliers** (marked as red circles) represent data points that lie far from the rest of the data. These can significantly affect the model's coefficients and predictions.
@@ -460,6 +468,17 @@ legend("topright", legend = c("Outlier", "High Leverage", "Influential"),
 In our case, we observed that there are a significant number of outliers and high leverage points in the data, which may pose limitations to the model. The presence of these points suggests that the model may be sensitive to these extreme values, which could lead to less reliable predictions and affect the generalizability of the results. These outliers and influential points need to be carefully addressed, either by transforming the data or removing problematic points, to ensure the robustness of the model. + confounding variables (+refer)[\[SB1\]](#_msocom_1) 
 
 //TODO [\[SB1\]](#0)Nega -\> confouding. And add some reference to descirbe
+
+## Final Model
+
+```{r}
+#| output: true
+
+# summary(final_model)
+
+tidy(final_model) %>%
+  kable(digits = 3, caption = "Summary of Final Model")
+```
 
 ## **Discussion and Conclusion** [\[SB1\]](#_msocom_1) 
 
