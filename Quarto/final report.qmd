@@ -175,6 +175,8 @@ for (var in predictors) {
 }
 ```
 
+*Fig. 3: Gr.Liv.Area, Year.Built, Garage.Area, TotRms.AbvGrd could have quadratic relationship with log(Sale.Price)*
+
 However, the variable **Year.Built** still showed some curvature, even after the transformation. To capture this non-linear pattern, we included a quadratic term for `Year.Built` in the model: $$(X_{Year.Built}- \bar{X_{Year.Built}})^2$$
 
 After refitting the model using `log(SalePrice)` as the response variable, the residuals appeared more randomly scattered, and the Q-Q plot aligned more closely with the theoretical line. These improvements suggest that the key regression assumptions are now better satisfied, making the model more suitable for inference.
@@ -222,27 +224,22 @@ house_numeric_lreg = lm(log_SalePrice ~ ., data = house_numeric_only)
 
 library(dplyr)
 
-# vif(house_numeric_lreg)
 vif_table <- car::vif(house_numeric_lreg)
 
-# If it's a named vector, convert it to a data frame
 if (is.numeric(vif_table)) {
   vif_table <- tibble::enframe(vif_table, name = "Variable", value = "VIF")
 }
 
-# Round and print nicely
 vif_table %>%
   mutate(VIF = round(VIF, 2)) %>%
-  kable(caption = "Variance Inflation Factors (VIF) for Final Model")
+  kable(caption = "Variance Inflation Factors (VIF) for Full Model")
 ```
-
-*Fig 5: VIF Values for Explanatory Variables*
 
 ## **Model Selection**
 
 To select the final set of explanatory variables, we used forward selection. Starting with an empty model, we added variables one by one based on how much they improved the model fit. Although the original dataset contained over 80 variables, we narrowed it down to 14 (includes quadratic terms) after filtering and diagnostic checks.
 
-To determine the best stopping point, we considered both Mallows' Cp and AIC values. The Cp plot showed that the score stabilized around 14 variables, with little improvement beyond that. AIC also reached its lowest point with 14 predictors.
+To determine the best stopping point, we considered both Mallows' Cp and AIC values. The Cp plot showed that the score stabilized around 14 variables, with little improvement beyond that. AIC also reached its lowest point with 14 variables.
 
 Following the principle of parsimony, we decided to go with the simplest model, selecting 14 variables as the final choice.
 
@@ -340,7 +337,7 @@ min_num_pred <- num_predictors[min_index]
 abline(v = min_num_pred, col = "red", lty = 2)
 ```
 
-*Fig 6: Model Selection using Mallows’ Cp and AIC*
+*Fig 5: Model Selection using Mallows’ Cp and AIC*
 
 ```{r}
 #| output: false
@@ -387,7 +384,7 @@ par(mfrow = c(1, 4))
 plot(final_model)
 ```
 
-*Fig. 7: Final Model Diagnostics, Assumption Check, Scale-Location and Residuals vs Leverage Plots for Final Model*
+*Fig. 6: Final Model Diagnostics, Assumption Check, Scale-Location and Residuals vs Leverage Plots for Final Model*
 
 ## **Interaction Term**
 
@@ -395,13 +392,13 @@ We explored all possible interactions between categorical variables (such as `Ce
 
 Here is a summary of the model comparison:
 
-|                           | number of parameter (p) | adj R\^2 |
-|---------------------------|-------------------------|----------|
-| additive_model            | 25                      | 0.8434   |
-| simpler_additive_model    | 22                      | 0.8434   |
-| final_model               | 13                      | 0.8423   |
-| interactive_model         | 39                      | 0.8531   |
-| simpler_interactive_model | 15                      | 0.8443   |
+|                           | number of estimator ($\hat{\beta}$) | adj $R^2$ |
+|-----------------------|-------------------------------|------------------|
+| additive_model            | 25                                  | 0.8434    |
+| simpler_additive_model    | 22                                  | 0.8434    |
+| final_model               | 13                                  | 0.8423    |
+| interactive_model         | 39                                  | 0.8531    |
+| simpler_interactive_model | 15                                  | 0.8443    |
 
 The simpler interactive model showed an adjusted $R^{2}$ close to the interactive model but with fewer parameters, making it a more efficient choice.
 
@@ -445,6 +442,8 @@ legend("topright", legend = c("Outlier", "High Leverage", "Influential"),
        col = c("red", "blue", "purple"), pch = c(19, 17, 4))
 ```
 
+*Fig. 7: Outliers, Leverage, and Influence Points*
+
 -   **Outliers** (marked as red circles) represent data points that lie far from the rest of the data. These can significantly affect the model's coefficients and predictions.
 
 -   **High leverage points** (indicated by blue triangles) are points that have extreme values for the independent variables. While not necessarily outliers in terms of the response variable, they can still influence the model strongly, especially if they are far from the center of the data.
@@ -482,9 +481,9 @@ cat(paste0(
 
 ## **Discussion and Conclusion**
 
-In conclusion, the final linear regression model based on 13 predictor variables satisfies the essential assumptions for regression analysis and provides meaningful insights into the key factors affecting house prices. By applying a log transformation to `SalePrice`, we stabilized the variance and made the error distribution more normal, addressing the issues found in the initial model’s diagnostic plots. We used forward selection to refine the model by selecting only the most relevant variables.
+In conclusion, the final linear regression model based on 10 covariates satisfies the essential assumptions for regression analysis and provides meaningful insights into the key factors affecting house prices. By applying a log transformation to `SalePrice`, we stabilized the variance and made the error distribution more normal, addressing the issues found in the initial model’s diagnostic plots. We used forward selection to refine the model by selecting only the most relevant variables.
 
-In our final model, we selected $13$ predictors along with the logarithmic transformation of sale price, specifically modeling `log(SalePrice/10000)` as the response variable. This model directly addresses the primary research question posed in the introduction. We found that for every additional square foot of living area (`Gr.Liv.Area`), the expected log-transformed sale price increases by approximately $0.0004$ (p \< 0.001), indicating a strong and statistically significant relationship. On the original scale, this corresponds to an approximate $0.04\%$ increase in sale price per additional square foot—a small but cumulative effect, consistent with expectations that larger homes command higher prices. Interestingly, the number of bedrooms above grade (`Bedroom.AbvGr`) was associated with a $2.6\%$ decrease in expected sale price for each additional bedroom, holding other variables constant. Although counterintuitive, this negative association persisted even after exploring interaction terms, suggesting the possibility of confounding. For example, homes with more bedrooms may be of lower overall quality or have smaller room sizes. Kassab (n.d.) offers a relevant interpretation: increasing the number of bedrooms and bathrooms while holding total area constant can reduce a home’s appeal, as it divides space into smaller rooms and diminishes perceived spaciousness. Additionally, the year of construction (`Year.Built`) was positively associated with sale price. Each one-year increase corresponds to an estimated $0.002$ increase in the log-transformed sale price, or roughly a $0.2\%$ increase in actual sale price, indicating that newer homes tend to be more valuable. Overall, our findings provide insights for both homebuyers and sellers in Ames, Iowa: newer homes with larger living areas and fewer bedrooms tend to achieve higher market values.
+In our final model, we selected $10$ covariates ($13$ coefficients $\hat{\beta}$ including categorical covariates) along with the logarithmic transformation of sale price, specifically modeling `log(SalePrice/10000)` as the response variable. This model directly addresses the primary research question posed in the introduction. We found that for every additional square foot of living area (`Gr.Liv.Area`), the expected log-transformed sale price increases by approximately $0.0004$ (p \< 0.001), indicating a strong and statistically significant relationship. On the original scale, this corresponds to an approximate $0.04\%$ increase in sale price per additional square foot—a small but cumulative effect, consistent with expectations that larger homes command higher prices. Interestingly, the number of bedrooms above grade (`Bedroom.AbvGr`) was associated with a $2.6\%$ decrease in expected sale price for each additional bedroom, holding other variables constant. Although counterintuitive, this negative association persisted even after exploring interaction terms, suggesting the possibility of confounding. For example, homes with more bedrooms may be of lower overall quality or have smaller room sizes. Kassab (n.d.) offers a relevant interpretation: increasing the number of bedrooms and bathrooms while holding total area constant can reduce a home’s appeal, as it divides space into smaller rooms and diminishes perceived spaciousness. Additionally, the year of construction (`Year.Built`) was positively associated with sale price. Each one-year increase corresponds to an estimated $0.002$ increase in the log-transformed sale price, or roughly a $0.2\%$ increase in actual sale price, indicating that newer homes tend to be more valuable. Overall, our findings provide insights for both homebuyers and sellers in Ames, Iowa: newer homes with larger living areas and fewer bedrooms tend to achieve higher market values.
 
 However, a few limitations were identified in the analysis. Outliers, high leverage points, and influential data points suggest that the model is sensitive to extreme values. These issues were addressed during the diagnostic phase, but further exploration and refinement may be needed to ensure the robustness of the model. The model with interaction terms showed a slight improvement in fit, but for simplicity, only the most significant interaction terms were included in the final model.
 
